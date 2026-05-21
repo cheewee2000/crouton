@@ -88,6 +88,10 @@ const MODELS = {
   'base':                { url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin',                file: 'ggml-base.bin' },
 };
 
+// Clamp 4..8 — whisper.cpp doesn't scale linearly past 8 threads on
+// Apple Silicon, and we leave headroom for the rest of the system.
+const WHISPER_THREADS = String(Math.max(4, Math.min(8, os.cpus().length)));
+
 function modelPath(key) {
   const m = MODELS[key]; if (!m) throw new Error(`Unknown model: ${key}`);
   return path.join(MODELS_DIR, m.file);
@@ -202,7 +206,7 @@ async function transcribeChunk({ audio, sampleRate, language, modelKey }) {
     '-m', mp, '-f', wavPath,
     '-otxt', '-of', outBase,
     '-nt', '--no-prints',
-    '-t', String(Math.max(4, Math.min(8, os.cpus().length))),
+    '-t', WHISPER_THREADS,
     // Voice activity detection: skip segments under the threshold instead of
     // hallucinating words on silence.
     '--suppress-nst',
@@ -226,19 +230,23 @@ async function transcribeChunk({ audio, sampleRate, language, modelKey }) {
 }
 
 // Whisper, when fed silence, falls back to a small set of training-data
-// tokens. Only drop chunks whose ENTIRE text is one of these — we never
-// touch substantive transcripts.
+// tokens. Only drop chunks whose ENTIRE text matches — we never touch
+// substantive transcripts. Phrases are stored canonical (lowercase, no
+// trailing punctuation); scrubHallucinations normalizes before lookup so
+// "You!", "YOU.", "you" all collapse to one entry.
 const HALLUCINATION_PHRASES = new Set([
-  'you', 'you.', 'You', 'You.',
-  'thank you', 'thank you.', 'Thank you', 'Thank you.',
-  'thanks for watching', 'thanks for watching.', 'Thanks for watching', 'Thanks for watching.',
-  'thank you for watching', 'thank you for watching.', 'Thank you for watching', 'Thank you for watching.',
-  'bye', 'bye.', 'Bye', 'Bye.', 'Bye-bye', 'Bye-bye.',
+  'you',
+  'thank you',
+  'thanks for watching',
+  'thank you for watching',
+  'bye',
+  'bye-bye',
 ]);
 function scrubHallucinations(text) {
   if (!text) return text;
   const t = text.trim();
-  if (HALLUCINATION_PHRASES.has(t)) {
+  const key = t.toLowerCase().replace(/[.!?]+$/, '');
+  if (HALLUCINATION_PHRASES.has(key)) {
     console.log('[crouton] dropping hallucinated chunk:', JSON.stringify(t));
     return '';
   }
@@ -273,7 +281,7 @@ async function runWhisperX(wavPath, outDir) {
     // CPU + int8 is the fastest+leanest combo on Apple Silicon.
     '--device', 'cpu',
     '--compute_type', 'int8',
-    '--threads', String(Math.max(4, Math.min(8, os.cpus().length))),
+    '--threads', WHISPER_THREADS,
     '--print_progress', 'False',
   ];
   if (settings.hfToken) args.push('--hf_token', settings.hfToken);
@@ -698,9 +706,8 @@ function createRecorderWindow() {
   recorderWin.loadFile(path.join(PROJECT_ROOT, 'recorder.html'));
   // Forward the hidden recorder's console.* to main stdout so we can see what
   // it's doing without opening DevTools. Visible when launched via `npm run dev`.
-  recorderWin.webContents.on('console-message', (_event, level, message) => {
-    const lvl = ['verbose', 'info', 'warning', 'error'][level] || 'log';
-    process.stdout.write(`[recorder ${lvl}] ${message}\n`);
+  recorderWin.webContents.on('console-message', (e) => {
+    process.stdout.write(`[recorder ${e.level}] ${e.message}\n`);
   });
   // Uncomment to debug audio capture:
   // recorderWin.webContents.openDevTools({ mode: 'detach' });
@@ -835,6 +842,9 @@ ipcMain.handle('whisper:transcribe', async (_event, payload) => {
   });
 });
 
+const MIC_PERMISSION_HELP =
+  'Grant Crouton mic access in System Settings → Privacy & Security → Microphone, then try again.';
+
 async function ensureMicPermission() {
   if (process.platform !== 'darwin') return true;
   const status = systemPreferences.getMediaAccessStatus('microphone');
@@ -846,7 +856,7 @@ async function ensureMicPermission() {
       buttons: ['Open System Settings', 'Cancel'],
       defaultId: 0,
       message: 'Crouton needs microphone access',
-      detail: 'macOS has blocked microphone access for Crouton. Grant access in System Settings → Privacy & Security → Microphone, then try recording again.',
+      detail: MIC_PERMISSION_HELP,
     });
     if (choice.response === 0) {
       shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
@@ -862,7 +872,7 @@ async function ensureMicPermission() {
 ipcMain.handle('session:start', async (_e, opts) => {
   if (!settings.vaultPath) throw new Error('Pick an Obsidian vault first.');
   const micOk = await ensureMicPermission();
-  if (!micOk) throw new Error('Microphone access denied. Grant Crouton mic access in System Settings → Privacy & Security → Microphone, then try again.');
+  if (!micOk) throw new Error('Microphone access denied. ' + MIC_PERMISSION_HELP);
   // Ensure whisper model is present
   await ensureWhisperModel(settings.whisperModel, (p) => {
     if (popoverWin && !popoverWin.isDestroyed()) popoverWin.webContents.send('whisper:progress', p);

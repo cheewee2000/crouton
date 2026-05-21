@@ -8,12 +8,16 @@
 const CHUNK_SECONDS = 15;
 const TARGET_SR = 16000;
 const MIN_CHUNK_SAMPLES = TARGET_SR * 0.5;
+// Set CROUTON_DEBUG=1 in the environment to see per-callback and per-chunk
+// audio diagnostics. Off by default to keep the audioprocess hot path tight.
+const DEBUG = typeof process !== 'undefined' && process.env && process.env.CROUTON_DEBUG === '1';
 
 let recording = false;
 let audioCtx = null;
 let micStream = null;
 let sourceNode = null;
 let processor = null;
+let sink = null;
 let chunks = [];
 let samples = 0;
 let sampleRate = TARGET_SR;
@@ -69,18 +73,19 @@ async function startRecording() {
   // Route through a muted gain node so the mic isn't actually played back to
   // the speakers. ScriptProcessorNode still needs *something* downstream of
   // ctx.destination to fire its callback reliably.
-  const sink = ctx.createGain();
+  sink = ctx.createGain();
   sink.gain.value = 0;
-  let cbCount = 0;
+  let firstCallback = true;
   processor.onaudioprocess = (e) => {
     const input = e.inputBuffer.getChannelData(0);
     const copy = new Float32Array(input.length);
     copy.set(input);
     chunks.push(copy);
     samples += copy.length;
-    cbCount++;
-    if (cbCount === 1) console.log('[crouton] first audioprocess callback fired — mic is live');
-    if (cbCount % 200 === 0) console.log(`[crouton] audioprocess callbacks: ${cbCount}`);
+    if (firstCallback) {
+      firstCallback = false;
+      console.log('[crouton] first audioprocess callback fired — mic is live');
+    }
   };
   sourceNode.connect(processor);
   processor.connect(sink);
@@ -99,6 +104,7 @@ async function stopRecording() {
   // Stop pulling new audio off the mic immediately, so flushChunk(true) gets
   // exactly what's been captured up to this moment and no more.
   try { processor && processor.disconnect(); } catch {}
+  try { sink && sink.disconnect(); } catch {}
   try { sourceNode && sourceNode.disconnect(); } catch {}
   if (micStream) micStream.getTracks().forEach((t) => t.stop());
 
@@ -110,7 +116,7 @@ async function stopRecording() {
   if (pendingFlushes.size) await Promise.allSettled([...pendingFlushes]);
 
   try { audioCtx && audioCtx.close(); } catch {}
-  audioCtx = null; micStream = null; sourceNode = null; processor = null;
+  audioCtx = null; micStream = null; sourceNode = null; processor = null; sink = null;
   chunks = []; samples = 0;
 }
 
@@ -126,13 +132,15 @@ async function flushChunk(isFinal) {
   const audio = sampleRate === TARGET_SR ? merged : resampleLinear(merged, sampleRate, TARGET_SR);
   if (audio.length < MIN_CHUNK_SAMPLES) return;
 
-  // Log RMS so we can diagnose silent-mic problems. Don't gate on it — that
-  // was too aggressive; whisper-cli's --no-speech-thold already handles
-  // silence and the hallucination scrubber in main.js catches the rest.
-  let sumSq = 0;
-  for (let i = 0; i < audio.length; i++) sumSq += audio[i] * audio[i];
-  const rms = Math.sqrt(sumSq / audio.length);
-  console.log(`[crouton] chunk: ${(audio.length / TARGET_SR).toFixed(1)}s, rms=${rms.toFixed(5)}${isFinal ? ' (final)' : ''}`);
+  // Off-path diagnostic: only computed when CROUTON_DEBUG=1. Whisper-cli's
+  // --no-speech-thold handles silence and the scrubber in main.js catches the
+  // hallucinations that slip through, so we don't need to gate on RMS here.
+  if (DEBUG) {
+    let sumSq = 0;
+    for (let i = 0; i < audio.length; i++) sumSq += audio[i] * audio[i];
+    const rms = Math.sqrt(sumSq / audio.length);
+    console.log(`[crouton] chunk: ${(audio.length / TARGET_SR).toFixed(1)}s, rms=${rms.toFixed(5)}${isFinal ? ' (final)' : ''}`);
+  }
 
   const work = (async () => {
     try {
