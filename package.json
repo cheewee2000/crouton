@@ -1,0 +1,36 @@
+{
+  "name": "crouton",
+  "version": "0.5.0",
+  "description": "Menu-bar app for macOS: local Whisper transcription → Obsidian note → local LLM summary with action items.",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --enable-logging",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.cwandt.crouton",
+    "productName": "Crouton",
+    "directories": { "output": "dist" },
+    "files": [
+      "electron/**/*",
+      "menubar.html", "menubar.css", "menubar.js",
+      "recorder.html", "recorder.js",
+      "favicon.svg", "icon-192.png", "icon-512.png", "icon-512-maskable.png"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [{ "target": "dmg", "arch": ["arm64"] }],
+      "icon": "icon-512.png",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Crouton uses the microphone to transcribe meetings on-device.",
+        "LSUIElement": true
+      }
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  }
+}

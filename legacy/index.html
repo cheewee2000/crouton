@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crouton — AI Meeting Notes</title>
+  <meta name="description" content="Local-first AI meeting notes with on-device Whisper Large transcription." />
+  <meta name="theme-color" content="#d97757" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Crouton" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <div class="brand-mark"></div>
+          <span class="brand-name">Crouton</span>
+        </div>
+        <button class="icon-btn" id="new-note-btn" title="New note">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </div>
+
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="search-input" placeholder="Search notes" />
+      </div>
+
+      <nav class="notes-list" id="notes-list">
+        <!-- Notes populated by JS -->
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="footer-btn" id="settings-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Settings</span>
+        </button>
+        <button class="footer-btn" id="install-btn" hidden title="Install as app">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Install</span>
+        </button>
+        <span class="version" id="version">v0.2.0</span>
+      </div>
+    </aside>
+
+    <!-- Main editor -->
+    <main class="editor">
+      <header class="editor-header">
+        <input type="text" id="note-title" class="note-title" placeholder="Untitled note" />
+        <div class="header-actions">
+          <span class="note-meta" id="note-meta"></span>
+          <button class="ghost-btn" id="enhance-btn" title="Enhance with AI">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <span>Enhance</span>
+          </button>
+          <button class="record-btn" id="record-btn" title="Start recording">
+            <span class="rec-dot"></span>
+            <span id="record-label">Record</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="panes">
+        <!-- Raw notes pane -->
+        <section class="pane raw-pane">
+          <div class="pane-header">
+            <span class="pane-title">My notes</span>
+            <span class="pane-sub">Type as you listen</span>
+          </div>
+          <div
+            id="raw-notes"
+            class="pane-body"
+            contenteditable="true"
+            spellcheck="true"
+            placeholder="Start typing your notes here..."
+          ></div>
+        </section>
+
+        <!-- Enhanced AI notes pane -->
+        <section class="pane enhanced-pane">
+          <div class="pane-header">
+            <span class="pane-title">Enhanced notes</span>
+            <span class="pane-sub" id="enhanced-sub">AI-formatted summary appears here</span>
+          </div>
+          <div id="enhanced-notes" class="pane-body enhanced-body">
+            <div class="empty-state">
+              <div class="empty-icon">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              </div>
+              <p class="empty-title">Enhanced notes will appear here</p>
+              <p class="empty-sub">Record a meeting or type notes, then click <strong>Enhance</strong> to get an AI-formatted summary with action items.</p>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Live transcript drawer -->
+      <div class="transcript-drawer" id="transcript-drawer">
+        <div class="drawer-handle">
+          <span class="rec-indicator"></span>
+          <span id="transcript-status">Listening…</span>
+          <div class="progress" id="model-progress" hidden>
+            <div class="progress-bar" id="model-progress-bar"></div>
+          </div>
+          <button class="close-btn" id="close-drawer">×</button>
+        </div>
+        <div class="transcript-body" id="transcript-body"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Settings modal -->
+  <div class="modal-backdrop" id="settings-modal" hidden>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button class="close-btn" id="close-settings">×</button>
+      </div>
+      <div class="modal-body">
+        <section class="settings-group">
+          <div class="settings-group-title">On-device transcription</div>
+          <label class="field">
+            <span class="field-label">Whisper model</span>
+            <select id="whisper-model-select">
+              <option value="Xenova/whisper-large-v3" selected>Whisper Large v3 (~900 MB, best quality)</option>
+              <option value="onnx-community/whisper-large-v3-turbo">Whisper Large v3 Turbo (~500 MB, fast)</option>
+              <option value="Xenova/whisper-medium">Whisper Medium (~470 MB)</option>
+              <option value="Xenova/whisper-small">Whisper Small (~190 MB)</option>
+              <option value="Xenova/whisper-base">Whisper Base (~60 MB)</option>
+            </select>
+            <span class="field-hint">Runs locally in your browser. First load downloads and caches the model.</span>
+          </label>
+          <label class="field">
+            <span class="field-label">Precision</span>
+            <select id="whisper-dtype-select">
+              <option value="q4" selected>q4 (smallest, recommended)</option>
+              <option value="q8">q8</option>
+              <option value="fp16">fp16</option>
+              <option value="fp32">fp32 (largest)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field-label">Language</span>
+            <select id="whisper-language-select">
+              <option value="en" selected>English</option>
+              <option value="auto">Auto-detect</option>
+              <option value="es">Spanish</option>
+              <option value="fr">French</option>
+              <option value="de">German</option>
+              <option value="it">Italian</option>
+              <option value="pt">Portuguese</option>
+              <option value="ja">Japanese</option>
+              <option value="ko">Korean</option>
+              <option value="zh">Chinese</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="settings-group">
+          <div class="settings-group-title">AI enhancement (cloud)</div>
+          <label class="field">
+            <span class="field-label">Anthropic API key</span>
+            <input type="password" id="api-key-input" placeholder="sk-ant-..." />
+            <span class="field-hint">Stored locally. Used only to format notes with Claude.</span>
+          </label>
+          <label class="field">
+            <span class="field-label">Model</span>
+            <select id="model-select">
+              <option value="claude-opus-4-7">Claude Opus 4.7 (best quality)</option>
+              <option value="claude-sonnet-4-6" selected>Claude Sonnet 4.6 (balanced)</option>
+              <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (fastest)</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="field-label">Enhancement template</span>
+            <textarea id="template-input" rows="5" placeholder="Custom prompt for enhancement"></textarea>
+            <span class="field-hint">Leave blank to use the default meeting-notes template.</span>
+          </label>
+        </section>
+      </div>
+      <div class="modal-footer">
+        <button class="ghost-btn" id="cancel-settings">Cancel</button>
+        <button class="primary-btn" id="save-settings">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
