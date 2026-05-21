@@ -225,17 +225,20 @@ async function transcribeChunk({ audio, sampleRate, language, modelKey }) {
   return scrubHallucinations(text.replace(/\s+/g, ' ').trim());
 }
 
-// Whisper, when fed silence, falls back to a small set of tokens it saw a lot
-// during training: "you", "thank you", "thanks for watching", "Bye." If a
-// chunk's *entire* text is just one of those repeated, treat it as silence
-// and drop it. We never drop substantive text — this only catches the
-// pathological all-hallucination case.
-const HALLUCINATION_RE =
-  /^((you|thank you|thanks for watching|thank you for watching|bye+|\.|,|!|\?|-)\s*[.,!?-]*\s*)+$/i;
+// Whisper, when fed silence, falls back to a small set of training-data
+// tokens. Only drop chunks whose ENTIRE text is one of these — we never
+// touch substantive transcripts.
+const HALLUCINATION_PHRASES = new Set([
+  'you', 'you.', 'You', 'You.',
+  'thank you', 'thank you.', 'Thank you', 'Thank you.',
+  'thanks for watching', 'thanks for watching.', 'Thanks for watching', 'Thanks for watching.',
+  'thank you for watching', 'thank you for watching.', 'Thank you for watching', 'Thank you for watching.',
+  'bye', 'bye.', 'Bye', 'Bye.', 'Bye-bye', 'Bye-bye.',
+]);
 function scrubHallucinations(text) {
   if (!text) return text;
   const t = text.trim();
-  if (HALLUCINATION_RE.test(t)) {
+  if (HALLUCINATION_PHRASES.has(t)) {
     console.log('[crouton] dropping hallucinated chunk:', JSON.stringify(t));
     return '';
   }
@@ -691,6 +694,12 @@ function createRecorderWindow() {
     },
   });
   recorderWin.loadFile(path.join(PROJECT_ROOT, 'recorder.html'));
+  // Forward the hidden recorder's console.* to main stdout so we can see what
+  // it's doing without opening DevTools. Visible when launched via `npm run dev`.
+  recorderWin.webContents.on('console-message', (_event, level, message) => {
+    const lvl = ['verbose', 'info', 'warning', 'error'][level] || 'log';
+    process.stdout.write(`[recorder ${lvl}] ${message}\n`);
+  });
   // Uncomment to debug audio capture:
   // recorderWin.webContents.openDevTools({ mode: 'detach' });
 }

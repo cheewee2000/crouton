@@ -71,12 +71,16 @@ async function startRecording() {
   // ctx.destination to fire its callback reliably.
   const sink = ctx.createGain();
   sink.gain.value = 0;
+  let cbCount = 0;
   processor.onaudioprocess = (e) => {
     const input = e.inputBuffer.getChannelData(0);
     const copy = new Float32Array(input.length);
     copy.set(input);
     chunks.push(copy);
     samples += copy.length;
+    cbCount++;
+    if (cbCount === 1) console.log('[crouton] first audioprocess callback fired — mic is live');
+    if (cbCount % 200 === 0) console.log(`[crouton] audioprocess callbacks: ${cbCount}`);
   };
   sourceNode.connect(processor);
   processor.connect(sink);
@@ -122,16 +126,13 @@ async function flushChunk(isFinal) {
   const audio = sampleRate === TARGET_SR ? merged : resampleLinear(merged, sampleRate, TARGET_SR);
   if (audio.length < MIN_CHUNK_SAMPLES) return;
 
-  // Quick RMS check — if the chunk is essentially silent, skip transcription.
-  // Whisper otherwise hallucinates "you / thank you / thanks for watching"
-  // from silence. Threshold ~ -50 dBFS.
+  // Log RMS so we can diagnose silent-mic problems. Don't gate on it — that
+  // was too aggressive; whisper-cli's --no-speech-thold already handles
+  // silence and the hallucination scrubber in main.js catches the rest.
   let sumSq = 0;
   for (let i = 0; i < audio.length; i++) sumSq += audio[i] * audio[i];
   const rms = Math.sqrt(sumSq / audio.length);
-  if (rms < 0.003) {
-    console.log(`[crouton] skipping silent chunk (rms=${rms.toFixed(5)}, ${(audio.length / TARGET_SR).toFixed(1)}s)`);
-    return;
-  }
+  console.log(`[crouton] chunk: ${(audio.length / TARGET_SR).toFixed(1)}s, rms=${rms.toFixed(5)}${isFinal ? ' (final)' : ''}`);
 
   const work = (async () => {
     try {
