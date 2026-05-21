@@ -10,7 +10,7 @@
 
 const {
   app, BrowserWindow, Tray, Menu, ipcMain, dialog, nativeImage,
-  screen, shell, globalShortcut, Notification,
+  screen, shell, globalShortcut, Notification, systemPreferences,
 } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -560,7 +560,9 @@ function broadcast(channel, payload) {
 function startSession(title) {
   if (session) return session;
   if (!settings.vaultPath) throw new Error('No Obsidian vault selected.');
-  const t = (title && title.trim()) || `Recording — ${timestampStr()}`;
+  // Default to just "Recording" — newNotePath() prepends the timestamp itself,
+  // so adding it here too produced "{ts} — Recording — {ts}".
+  const t = (title && title.trim()) || 'Recording';
   const notePath = newNotePath(t);
   const createdISO = isoLocal();
   const initial = initialNoteContent(t);
@@ -833,8 +835,34 @@ ipcMain.handle('whisper:transcribe', async (_event, payload) => {
   });
 });
 
+async function ensureMicPermission() {
+  if (process.platform !== 'darwin') return true;
+  const status = systemPreferences.getMediaAccessStatus('microphone');
+  console.log('[Crouton] mic access status:', status);
+  if (status === 'granted') return true;
+  if (status === 'denied' || status === 'restricted') {
+    const choice = await dialog.showMessageBox({
+      type: 'warning',
+      buttons: ['Open System Settings', 'Cancel'],
+      defaultId: 0,
+      message: 'Crouton needs microphone access',
+      detail: 'macOS has blocked microphone access for Crouton. Grant access in System Settings → Privacy & Security → Microphone, then try recording again.',
+    });
+    if (choice.response === 0) {
+      shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
+    }
+    return false;
+  }
+  // status is 'not-determined' — show the native prompt
+  const granted = await systemPreferences.askForMediaAccess('microphone');
+  console.log('[Crouton] askForMediaAccess result:', granted);
+  return granted;
+}
+
 ipcMain.handle('session:start', async (_e, opts) => {
   if (!settings.vaultPath) throw new Error('Pick an Obsidian vault first.');
+  const micOk = await ensureMicPermission();
+  if (!micOk) throw new Error('Microphone access denied. Grant Crouton mic access in System Settings → Privacy & Security → Microphone, then try again.');
   // Ensure whisper model is present
   await ensureWhisperModel(settings.whisperModel, (p) => {
     if (popoverWin && !popoverWin.isDestroyed()) popoverWin.webContents.send('whisper:progress', p);
@@ -927,6 +955,8 @@ ipcMain.handle('app:open-external', (_e, url) => {
 ipcMain.on('session:start-via-menu', async () => {
   try {
     if (!settings.vaultPath) { togglePopover(); return; }
+    const micOk = await ensureMicPermission();
+    if (!micOk) return;
     await ensureWhisperModel(settings.whisperModel);
     startSession('');
     if (recorderWin) recorderWin.webContents.send('recorder:command', { type: 'start' });
