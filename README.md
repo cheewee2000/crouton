@@ -29,45 +29,61 @@ Nothing leaves your machine — no cloud APIs, no accounts, no telemetry.
 | Summarization | [Ollama](https://ollama.com) (default model: `llama3.2:3b`) |
 | Note destination | Markdown file inside your Obsidian vault |
 
-## Setup
+## Install
 
-You need a Mac with Apple Silicon and Homebrew.
+**Requires:** Mac with Apple Silicon (M1/M2/M3/M4) and [Homebrew](https://brew.sh).
+
+### 1. Download the app
+
+Grab the latest DMG from the [Releases page](https://github.com/cheewee2000/crouton/releases/latest) and drag **Crouton.app** to your Applications folder.
+
+The app is code-signed but **not Apple-notarized**, so on first launch macOS will refuse to open it. Either:
+
+- **Right-click** Crouton.app → **Open** → click **Open** in the dialog, or
+- run `xattr -dr com.apple.quarantine /Applications/Crouton.app` once.
+
+### 2. Install the local tools Crouton orchestrates
 
 ```bash
-# 1) Core dependencies
 brew install whisper-cpp ollama ffmpeg uv
 brew services start ollama
 
-# 2) Local LLM for summaries
+# Local LLM for meeting summaries
 ollama pull llama3.2:3b
 
-# 3) Speaker diarization (Python, isolated)
+# Speaker diarization (Python, isolated)
 uv tool install whisperx
-
-# 4) HuggingFace token for pyannote (required for diarization)
-#    - Sign in at huggingface.co
-#    - Accept terms at:
-#      https://huggingface.co/pyannote/segmentation-3.0
-#      https://huggingface.co/pyannote/speaker-diarization-3.1
-#    - Generate a read token at https://huggingface.co/settings/tokens
-#    - Paste it into Crouton → Settings → HuggingFace token
 ```
 
-## Run
+### 3. Get a HuggingFace token (for speaker diarization)
+
+pyannote's models are free but gated.
+
+- Sign in at [huggingface.co](https://huggingface.co)
+- Accept the terms at both [pyannote/segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) and [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
+- Create a read token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+- Paste it into **Crouton → gear icon → HuggingFace token**
+
+### 4. Launch
+
+`⌘Space` → "Crouton". The app lives in the menu bar — no Dock icon. Press `⌘ ⇧ \` from anywhere to toggle the popover.
+
+First run prompts you to pick your Obsidian vault. Recordings land in `<vault>/Crouton/<timestamp> — <title>.md`.
+
+## Build from source
+
+For development or if you'd rather not trust a prebuilt DMG:
 
 ```bash
 git clone https://github.com/cheewee2000/crouton.git
 cd crouton
 npm install
-npm start                          # dev mode
-# or:
-npm run pack                       # builds dist/mac-arm64/Crouton.app
-cp -R dist/mac-arm64/Crouton.app /Applications/
+npm start                # dev mode (runs from project dir)
+npm run install-app      # build + install to /Applications + relaunch
+npm run dist             # produce DMG in dist/
 ```
 
-Once installed, launch from Spotlight (`⌘Space` → "Crouton"). The app lives in the menu bar; there's no Dock icon. Use `⌘ ⇧ \` to toggle the popover from anywhere.
-
-First run prompts you to choose your Obsidian vault. Recordings land in `<vault>/Crouton/<timestamp> — <title>.md`.
+You still need the local tools from step 2 above.
 
 ## Settings
 
