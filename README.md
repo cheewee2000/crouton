@@ -4,7 +4,7 @@ A local-first macOS menu-bar app that captures meetings, transcribes them with *
 
 Nothing leaves your machine — no cloud APIs, no accounts, no telemetry.
 
-**Version:** 0.5.0
+**Version:** 0.5.2
 
 ## What it does
 

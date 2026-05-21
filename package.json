@@ -1,6 +1,6 @@
 {
   "name": "crouton",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Menu-bar app for macOS: local Whisper transcription → Obsidian note → local LLM summary with action items.",
   "main": "electron/main.js",
   "scripts": {
