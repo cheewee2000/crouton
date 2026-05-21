@@ -78,9 +78,10 @@ For development or if you'd rather not trust a prebuilt DMG:
 git clone https://github.com/cheewee2000/crouton.git
 cd crouton
 npm install
-npm start                # dev mode (runs from project dir)
-npm run install-app      # build + install to /Applications + relaunch
-npm run dist             # produce DMG in dist/
+npm start                       # dev mode (runs from project dir)
+npm run install-app             # build + install to /Applications + relaunch
+npm run dist                    # produce DMG in dist/
+npm run release -- 0.5.3        # bump + build + tag + push + GitHub release + install
 ```
 
 You still need the local tools from step 2 above.

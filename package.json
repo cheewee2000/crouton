@@ -8,7 +8,8 @@
     "dev": "electron . --enable-logging",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
-    "install-app": "npm run pack && (pkill -f 'Crouton.app/Contents/MacOS/Crouton' || true) && rm -rf /Applications/Crouton.app && cp -R dist/mac-arm64/Crouton.app /Applications/ && open /Applications/Crouton.app"
+    "install-app": "npm run pack && (pkill -f 'Crouton.app/Contents/MacOS/Crouton' || true) && rm -rf /Applications/Crouton.app && cp -R dist/mac-arm64/Crouton.app /Applications/ && open /Applications/Crouton.app",
+    "release": "bash scripts/release.sh"
   },
   "build": {
     "appId": "com.cwandt.crouton",
