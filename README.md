@@ -155,6 +155,3 @@ legacy/                   — earlier PWA prototype (kept for reference)
 - pyannote's diarization model is fetched from HuggingFace **once** (cached afterward).
 - All notes are written to your local Obsidian vault.
 
-## Not affiliated with Granola
-
-Crouton is an independent project, not affiliated with Granola.ai. It exists because I wanted Granola's UX without the cloud dependency.
