@@ -24,6 +24,9 @@
       "category": "public.app-category.productivity",
       "target": [{ "target": "dmg", "arch": ["arm64"] }],
       "icon": "icon-512.png",
+      "hardenedRuntime": true,
+      "entitlements": "electron/entitlements.mac.plist",
+      "entitlementsInherit": "electron/entitlements.mac.plist",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Crouton uses the microphone to transcribe meetings on-device.",
         "LSUIElement": true
