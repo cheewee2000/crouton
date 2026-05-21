@@ -28,16 +28,22 @@ async function startRecording() {
   if (recording) return;
   let stream;
   try {
+    // Important: disable echoCancellation / noiseSuppression / autoGainControl.
+    // We're recording for transcription, not a video call. With echoCancellation
+    // on, the ScriptProcessor → ctx.destination loop below (required to make
+    // ScriptProcessorNode fire) acts as an echo source — the AEC cancels the
+    // mic against its own playback and Whisper ends up with silent buffers,
+    // which it hallucinates as "you you you thank you".
     stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
       },
     });
   } catch (err) {
-    console.error('mic error', err);
+    console.error('[crouton] mic error', err);
     return;
   }
 
@@ -47,9 +53,24 @@ async function startRecording() {
   audioCtx = ctx;
   micStream = stream;
   sampleRate = ctx.sampleRate;
+  if (ctx.state === 'suspended') {
+    try { await ctx.resume(); } catch (_e) { /* ignore */ }
+  }
+
+  // Log which mic the OS actually gave us, useful when debugging "you you you"
+  // hallucinations caused by the wrong (muted/virtual) input being selected.
+  try {
+    const track = stream.getAudioTracks()[0];
+    if (track) console.log('[crouton] mic device:', track.label, '| sampleRate=', ctx.sampleRate);
+  } catch {}
 
   sourceNode = ctx.createMediaStreamSource(stream);
   processor = ctx.createScriptProcessor(4096, 1, 1);
+  // Route through a muted gain node so the mic isn't actually played back to
+  // the speakers. ScriptProcessorNode still needs *something* downstream of
+  // ctx.destination to fire its callback reliably.
+  const sink = ctx.createGain();
+  sink.gain.value = 0;
   processor.onaudioprocess = (e) => {
     const input = e.inputBuffer.getChannelData(0);
     const copy = new Float32Array(input.length);
@@ -58,7 +79,8 @@ async function startRecording() {
     samples += copy.length;
   };
   sourceNode.connect(processor);
-  processor.connect(ctx.destination);
+  processor.connect(sink);
+  sink.connect(ctx.destination);
 
   chunks = [];
   samples = 0;
@@ -99,6 +121,17 @@ async function flushChunk(isFinal) {
 
   const audio = sampleRate === TARGET_SR ? merged : resampleLinear(merged, sampleRate, TARGET_SR);
   if (audio.length < MIN_CHUNK_SAMPLES) return;
+
+  // Quick RMS check — if the chunk is essentially silent, skip transcription.
+  // Whisper otherwise hallucinates "you / thank you / thanks for watching"
+  // from silence. Threshold ~ -50 dBFS.
+  let sumSq = 0;
+  for (let i = 0; i < audio.length; i++) sumSq += audio[i] * audio[i];
+  const rms = Math.sqrt(sumSq / audio.length);
+  if (rms < 0.003) {
+    console.log(`[crouton] skipping silent chunk (rms=${rms.toFixed(5)}, ${(audio.length / TARGET_SR).toFixed(1)}s)`);
+    return;
+  }
 
   const work = (async () => {
     try {

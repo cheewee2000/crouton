@@ -203,6 +203,10 @@ async function transcribeChunk({ audio, sampleRate, language, modelKey }) {
     '-otxt', '-of', outBase,
     '-nt', '--no-prints',
     '-t', String(Math.max(4, Math.min(8, os.cpus().length))),
+    // Voice activity detection: skip segments under the threshold instead of
+    // hallucinating words on silence.
+    '--suppress-nst',
+    '--no-speech-thold', '0.6',
   ];
   if (language && language !== 'auto') args.push('-l', language);
 
@@ -218,7 +222,24 @@ async function transcribeChunk({ audio, sampleRate, language, modelKey }) {
   try { text = await fsp.readFile(outBase + '.txt', 'utf8'); } catch {}
   fsp.unlink(wavPath).catch(() => {});
   fsp.unlink(outBase + '.txt').catch(() => {});
-  return text.replace(/\s+/g, ' ').trim();
+  return scrubHallucinations(text.replace(/\s+/g, ' ').trim());
+}
+
+// Whisper, when fed silence, falls back to a small set of tokens it saw a lot
+// during training: "you", "thank you", "thanks for watching", "Bye." If a
+// chunk's *entire* text is just one of those repeated, treat it as silence
+// and drop it. We never drop substantive text — this only catches the
+// pathological all-hallucination case.
+const HALLUCINATION_RE =
+  /^((you|thank you|thanks for watching|thank you for watching|bye+|\.|,|!|\?|-)\s*[.,!?-]*\s*)+$/i;
+function scrubHallucinations(text) {
+  if (!text) return text;
+  const t = text.trim();
+  if (HALLUCINATION_RE.test(t)) {
+    console.log('[crouton] dropping hallucinated chunk:', JSON.stringify(t));
+    return '';
+  }
+  return text;
 }
 
 // -------------------------------------------------------------
