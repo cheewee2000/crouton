@@ -17,8 +17,13 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; line-height: 1.45; }
-body { -webkit-app-region: drag; -webkit-user-select: none; user-select: none; }
-input, textarea, select, button { -webkit-app-region: no-drag; -webkit-user-select: text; user-select: text; }
+/* Note: NOT setting -webkit-app-region: drag on body. The popover window is
+ * movable: false in main.js, so a drag region would only serve to swallow
+ * wheel/scroll events outside of form controls (which broke scrolling in the
+ * Settings panel — wheel only worked when hovering over inputs that had
+ * -webkit-app-region: no-drag). */
+body { -webkit-user-select: none; user-select: none; }
+input, textarea, select, button { -webkit-user-select: text; user-select: text; }
 button { cursor: pointer; border: none; background: none; font: inherit; color: inherit; }
 
 .app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
