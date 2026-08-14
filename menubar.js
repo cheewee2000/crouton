@@ -29,6 +29,7 @@ const dom = {
 
   openNote: document.getElementById('open-note-btn'),
   revealNote: document.getElementById('reveal-note-btn'),
+  newSession: document.getElementById('new-session-btn'),
 
   vaultPath: document.getElementById('vault-path'),
   changeVault: document.getElementById('change-vault'),
@@ -50,6 +51,7 @@ const state = {
   info: null,
   session: { active: false },
   currentNote: null,
+  summarizing: false,
   timerInterval: null,
 };
 
@@ -134,6 +136,7 @@ function updateSessionUi() {
     state.currentNote = state.session.notePath || null;
     dom.openNote.disabled = !state.currentNote;
     dom.revealNote.disabled = !state.currentNote;
+    dom.newSession.disabled = true;
 
     startTimer(state.session.startedAt);
     if (state.session.transcript) renderTranscript(state.session.transcript, null);
@@ -143,7 +146,26 @@ function updateSessionUi() {
     dom.titleInput.disabled = false;
     stopTimer();
     dom.statusTime.textContent = '';
+    dom.newSession.disabled = state.summarizing ||
+      (!state.currentNote && !dom.transcriptPreview.textContent && !dom.titleInput.value);
   }
+}
+
+function clearSession() {
+  state.currentNote = null;
+  state.session = { active: false };
+  dom.titleInput.value = '';
+  dom.titleInput.disabled = false;
+  dom.transcriptPreview.innerHTML = '';
+  dom.noteMeta.hidden = true;
+  dom.noteName.textContent = '';
+  dom.openNote.disabled = true;
+  dom.revealNote.disabled = true;
+  dom.newSession.disabled = true;
+  dom.statusText.textContent = 'Ready';
+  dom.statusTime.textContent = '';
+  dom.statusRow.classList.remove('recording');
+  dom.titleInput.focus();
 }
 
 function startTimer(startedAt) {
@@ -286,6 +308,7 @@ dom.recordBtn.addEventListener('click', toggleRecording);
 
 dom.openNote.addEventListener('click', () => state.currentNote && window.crouton.openNote(state.currentNote));
 dom.revealNote.addEventListener('click', () => state.currentNote && window.crouton.revealNote(state.currentNote));
+dom.newSession.addEventListener('click', clearSession);
 
 // Save settings on change (so they persist across blur-hides)
 for (const el of [
@@ -315,6 +338,8 @@ window.crouton.onChunk(({ text, transcript }) => {
   renderTranscript(transcript, text);
 });
 window.crouton.onSummaryStatus(({ status, notePath, message }) => {
+  state.summarizing = status !== 'done';
+  dom.newSession.disabled = state.summarizing;
   if (status === 'draining') {
     dom.statusText.textContent = 'Finishing transcription…';
     dom.statusRow.classList.remove('recording');

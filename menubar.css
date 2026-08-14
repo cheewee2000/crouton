@@ -194,6 +194,7 @@ button { cursor: pointer; border: none; background: none; font: inherit; color: 
 }
 .link-btn:hover:not(:disabled) { color: var(--text); background: rgba(0,0,0,0.04); }
 .link-btn:disabled { color: var(--text-faint); cursor: default; }
+.footer-spacer { margin-left: auto; }
 
 /* Settings panel */
 .settings-panel {
